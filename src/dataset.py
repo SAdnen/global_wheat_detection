@@ -38,16 +38,13 @@ class GlobalWheatDataset(Dataset):
                       "iscrowd": iscrowd,
                       }
 
-            if self.transforms:
-                sample = self.transforms(**{"image": image,
-                                            "bboxes": bboxes,
-                                            "labels": labels})
+            sample = self.transforms(**{"image": image,
+                                        "bboxes": bboxes,
+                                        "labels": labels})
 
-                target["boxes"] = torch.as_tensor(sample["bboxes"], dtype=torch.float32).reshape(-1, 4)
-                image = sample["image"]
-                return image, target
-            else:
-                return image, target
+            target["boxes"] = torch.as_tensor(sample["bboxes"], dtype=torch.float32).reshape(-1, 4)
+            image = sample["image"]
+            return image, target
         else:
             sample = self.transforms(**{"image": image})
             return sample["image"], image_id
@@ -80,3 +77,37 @@ class TestDataset(Dataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB).astype(np.float32)
         image /= 255.0
         return image
+
+class MixupDataset(GlobalWheatDataset):
+    def __init__(self, df, image_ids, data_dir, transforms, train=True):
+        super(MixupDataset, self).__init__(df, image_ids, data_dir, transforms, train=True)
+
+    def __getitem__(self, index):
+        image_id = self.image_ids[index]
+        filename = image_id + ".jpg"
+        image_path = os.path.join(self.data_dir, filename)
+        image = self.load_image(image_path)
+        if self.train:
+            bboxes_areas = self.df[self.df.image_id == image_id][
+                ["xmin", "ymin", "xmax", "ymax", "area"]].values  # .astype(np.float)
+            # bboxes_areas = torch.as_tensor(bboxes_areas, dtype=torch.float32)
+            bboxes = bboxes_areas[:, :-1]
+            area = torch.as_tensor(bboxes_areas[:, -1])
+            labels = torch.ones(len(bboxes), dtype=torch.int64)
+            image_id = torch.as_tensor([index], dtype=torch.int64)
+            iscrowd = torch.zeros(len(bboxes_areas), dtype=torch.uint8)
+
+            target = {"boxes": bboxes,
+                      "labels": labels,
+                      "image_id": image_id,
+                      "area": area,
+                      "iscrowd": iscrowd,
+                      }
+
+            sample = self.transforms(**{"image": image,
+                                        "bboxes": bboxes,
+                                        "labels": labels})
+
+            target["boxes"] = torch.as_tensor(sample["bboxes"], dtype=torch.float32).reshape(-1, 4)
+            image = sample["image"]
+            return image, target

@@ -1,5 +1,5 @@
 import numpy as np
-
+from collections import defaultdict
 
 def iou_score(gt, pred) -> float:
     '''Computes the iou score between ground truth box and predicted box
@@ -37,7 +37,7 @@ def find_best_match(pred, gts):
     return index, max_match, iou_score(max_match, pred)
 
 
-def map_score(gts, preds, thresholds: list) -> (float, list[float]):
+def map_score(gts, preds, thresholds: list) -> (float, [float]):
 
     '''
     TODO: adapt the code for jit compiler
@@ -56,7 +56,7 @@ def map_score(gts, preds, thresholds: list) -> (float, list[float]):
         return the mean
     '''
     if len(gts) == 0:
-        return 0
+        return 0, [0]
 
     thresholds = np.array(thresholds)
     positives = np.zeros((len(preds), len(thresholds)))
@@ -82,3 +82,53 @@ def map_score(gts, preds, thresholds: list) -> (float, list[float]):
     # print(positives)
     # print(matched_boxes)
     return score, scores
+
+
+class MetricLogger(object):
+    def __init__(self, dtype='scalar'):
+        assert(dtype in ["scalar", "list", "dict"]), "Please choose one of ['scalar', 'list', 'dict']"
+        self.dtype = dtype
+        self.reset()
+
+    def reset(self):
+        self.sum = 0
+        self.avg = 0
+        self.count = 0
+
+        if self.dtype == "scalar":
+            self.value = 0
+        elif self.dtype == "list":
+            self.value = []
+        else:
+            self.value = defaultdict(list)
+
+
+
+    def update(self, value):
+        if self.dtype ==  "scalar":
+            assert(isinstance(value, (float, int))), "Expected scalar value"
+            self.value = value
+            self.sum += value
+            self.count += 1
+            self.avg = self.sum/self.count
+        elif self.dtype == "list":
+            assert(isinstance(value, (list, tuple, np.ndarray))), "Expected list, array or tuple as value"
+
+            self.value.extend(value)
+            self.sum = sum(self.value)
+            self.count = len(self.value)
+            self.avg = self.sum/self.count
+
+        else:
+            assert(isinstance(value, dict)), "Expected dict type"
+            for key, value in value.items():
+                self.value[key].append(value.item())
+            self.count += 1
+            self.sum = {key: np.sum(value) for (key, value) in self.value.items()}
+            self.avg = {key: value / self.count for (key, value) in self.sum.items()}
+
+if __name__ == "__main__":
+    scalar_metric = MetricLogger(dtype="scalar")
+    list_metric = MetricLogger(dtype="list")
+    dict_metric = MetricLogger(dtype="dict")
+    print("done")

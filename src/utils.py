@@ -1,12 +1,17 @@
 import albumentations as A
+import numpy as np
 from albumentations.pytorch.transforms import ToTensorV2
 from torch.utils.data import DataLoader
-from .dataset import GlobalWheatDataset
+from src.dataset import GlobalWheatDataset
+from src.config import path_settings
+from sklearn.model_selection import StratifiedKFold
+import pandas as pd
 
-def get_train_transforms():
+def get_train_transforms(cfg):
+    image_size = cfg["image_size"]
     return A.Compose(
         [
-            A.RandomSizedCrop(min_max_height=(800, 800), height=1024, width=1024, p=0.5),
+            A.RandomSizedCrop(min_max_height=(500, 500), height=image_size, width=image_size, p=0.5),
 
             A.OneOf([
                 A.HueSaturationValue(hue_shift_limit=0.2, sat_shift_limit=0.2,
@@ -18,7 +23,7 @@ def get_train_transforms():
             A.ToGray(p=0.01),
             A.HorizontalFlip(p=0.5),
             A.VerticalFlip(p=0.5),
-            A.Resize(height=512, width=512, p=1),
+            A.Resize(height=image_size, width=image_size, p=1),
             A.CoarseDropout(max_holes=8, max_height=64, max_width=64, fill_value=0, p=0.5),
             ToTensorV2(p=1.0),
         ],
@@ -32,10 +37,11 @@ def get_train_transforms():
     )
 
 
-def get_valid_transforms():
+def get_valid_transforms(cfg):
+    image_size = cfg["image_size"]
     return A.Compose(
         [
-            A.Resize(height=512, width=512, p=1.0),
+            A.Resize(height=image_size, width=image_size, p=1.0),
             ToTensorV2(p=1.0),
         ],
         p=1.0,
@@ -48,10 +54,11 @@ def get_valid_transforms():
     )
 
 
-def get_test_transforms():
+def get_test_transforms(cfg):
+    image_size = cfg["image_size"]
     return A.Compose(
         [
-            A.Resize(height=512, width=512, p=1.0),
+            A.Resize(height=image_size, width=image_size, p=1.0),
             ToTensorV2(p=1.0),
         ],
         p=1.0,
@@ -63,15 +70,15 @@ def collate_fn(batch):
     return sample
 
 
-def get_train_val_indexes(df, ifold):
-    val_df = df.loc[df.fold == ifold]
-    train_df = df.loc[df.fold != ifold]
+def get_train_val_indexes(folds_df, ifold):
+    val_df = folds_df.loc[folds_df.fold == ifold]
+    train_df = folds_df.loc[folds_df.fold != ifold]
     return train_df.image_id.values, val_df.image_id.values
 
 
-def get_train_valid_dataloaders(ifold, df, folds_df, train_dir):
-    train_transforms = get_train_transforms()
-    valid_transforms = get_valid_transforms()
+def get_train_valid_dataloaders(ifold: int, df: pd.DataFrame, folds_df: pd.DataFrame, train_dir: str, cfg: dict) -> [DataLoader, DataLoader]:
+    train_transforms = get_train_transforms(cfg)
+    valid_transforms = get_valid_transforms(cfg)
     train_idx, valid_idx = get_train_val_indexes(folds_df, ifold)
     train_dataset = GlobalWheatDataset(df, train_idx, train_dir, train_transforms, train=True)
     valid_dataset = GlobalWheatDataset(df, valid_idx, train_dir, valid_transforms, train=True)
@@ -79,11 +86,86 @@ def get_train_valid_dataloaders(ifold, df, folds_df, train_dir):
     train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=4, drop_last=True,
                                   collate_fn=collate_fn)
     valid_dataloader = DataLoader(valid_dataset, batch_size=4, shuffle=False, num_workers=4, collate_fn=collate_fn)
-    return train_dataloader, valid_dataloader
+    train_dataloader_mix = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=4, drop_last=True,
+                                  collate_fn=collate_fn)
+    if cfg['mixup'] == True:
+        return zip(train_dataloader, train_dataloader_mix), valid_dataloader
+    else:
+        return train_dataloader, valid_dataloader
 
 
-def get_test_dataloader(test_df, test_dir, batch_size):
-    test_transforms = get_test_transforms()
+def get_test_dataloader(test_df, test_dir, batch_size, cfg):
+    test_transforms = get_test_transforms(cfg)
     test_dataset = GlobalWheatDataset(test_df, test_df.image_id.unique(), test_dir, test_transforms, train=False)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, num_workers=4)
     return test_dataloader
+
+
+def skFold(df: pd.DataFrame, nfolds: int=5) -> pd.DataFrame:
+    skf = StratifiedKFold(n_splits=nfolds, shuffle=True, random_state=7)
+    folds_df = df.groupby(["image_id", "source"])["source"].count().to_frame(name="bbox_count").reset_index()
+    folds_df['stratify_group'] = np.char.add(folds_df["source"].values.astype(str), folds_df['bbox_count'].apply(lambda x: f'_{x // 20}').values.astype(str))
+    folds_df['fold'] = 0
+    for fold, (train_index, test_index) in enumerate(skf.split(folds_df, folds_df.stratify_group)):
+        folds_df.loc[test_index, 'fold'] = fold
+    return folds_df
+
+
+def get_bboxes_areas(row_box):
+    bbox = np.fromstring(row_box[1:-1], sep=",")
+    x, y, w, h = bbox
+    return x, y, x+w, y+h, w, h, w*h
+
+def load_dataframes():
+    df = pd.read_csv("../train.csv")
+    df['xmin'] = -1
+    df['ymin'] = -1
+    df['xmax'] = -1
+    df['ymax'] = -1
+    df['w'] = -1
+    df['h'] = -1
+    df['area'] = 0
+    df[['xmin', 'ymin', 'xmax', 'ymax', 'w', 'h', 'area']] = np.stack(
+        df['bbox'].apply(lambda row_box: get_bboxes_areas(row_box)))
+    df.drop(columns=["bbox"], inplace=True)
+    df = df.drop(df.loc[(df.w < 20) | (df.h < 20)].index.values, axis=0)
+    test_df = pd.read_csv("../sample_submission.csv")
+    return df, test_df
+
+
+class Dloaders:
+    df, test_df = load_dataframes()
+    folds_df = skFold(df)
+
+    def get_dataloaders(self, ifold, cfg):
+        train_dir = path_settings["train"]
+        test_dir = path_settings["test"]
+        train_dataloader, valid_dataloader = get_train_valid_dataloaders(ifold, self.df, self.folds_df, train_dir, cfg)
+        test_datalaoder = get_test_dataloader(self.test_df, test_dir, batch_size=2, cfg=cfg)
+        data_loaders = {"train": train_dataloader,
+                        "valid": valid_dataloader,
+                        "test": test_datalaoder}
+        return data_loaders
+
+import torch
+
+def merge_targets(target1, target2):
+    targets = []
+    for i in range(len(target1)):
+        target = dict()
+        for key in target1[i].keys():
+            merged_value = torch.cat([target1[i][key], target2[i][key]])
+            target[key] = merged_value
+        targets.append(target)
+    return tuple(targets)
+
+def mixup_images(images1, images2):
+    mixed_images = [0.5 * (images1 + images2) for (images1, images2) in zip(images1, images2)]
+    return tuple(mixed_images)
+
+
+
+if __name__ == "__main__":
+    train_df, test_df = load_dataframes()
+    dloaders = Dloaders().get_dataloaders(0)
+    print("done")

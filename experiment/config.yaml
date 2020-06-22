@@ -1,0 +1,32 @@
+project: "global-wheat-detection"
+id: "fasterrcnn_resnet50_fpn_200_rpn_mixup"
+
+# classifier
+device: "cuda"
+accumulation_steps: 4
+checkpoint: ""   # "fasterrcnn_resnet50_fpn_200_rpn_epoch_33_.pth"
+
+# optimizer:
+lr: 0.0001
+
+metrics: ["map_score"]
+
+network: "resnet50_fpn"
+
+# data:
+train_nsamples: 80
+val_nsamples: 40
+image_size: 800
+batch_size: 2
+mixup: True
+
+# transforms:
+RandomCrop: False
+Normalize: [[0.485, 0.456, 0.406], [0.229, 0.224, 0.225]]
+RandomHorizontalFlip: False
+RandomVerticalFlip: False
+
+# experiment:
+seed: 41
+nfolds: 5
+nepochs: 6
