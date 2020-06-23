@@ -2,10 +2,78 @@ import albumentations as A
 import numpy as np
 from albumentations.pytorch.transforms import ToTensorV2
 from torch.utils.data import DataLoader
-from src.dataset import GlobalWheatDataset
+from src.dataset import GlobalWheatDataset, CutMixDataset
 from src.config import path_settings
 from sklearn.model_selection import StratifiedKFold
 import pandas as pd
+import torch
+
+def merge_targets(target1, target2):
+    targets = []
+    for i in range(len(target1)):
+        target = dict()
+        for key in target1[i].keys():
+            merged_value = torch.cat([target1[i][key], target2[i][key]])
+            target[key] = merged_value
+        targets.append(target)
+    return tuple(targets)
+
+def mixup_images(images1, images2):
+    mixed_images = [0.5 * (images1 + images2) for (images1, images2) in zip(images1, images2)]
+    return tuple(mixed_images)
+
+def random_crop(image, target):
+    boxes_crop = target["boxes"]
+    x, y, _ = image.size()
+    xc, yc = x//2, y//2
+    image_crop = image[: xc, : yc, :]
+    boxes_crop[:, [0, 2]] = np.clip(boxes_crop[:, [0, 2]], 0, xc)
+    boxes_crop[:, [1, 3]] = np.clip(boxes_crop[:, [1, 3]], 0, yc)
+    mask = (boxes_crop[:, 0]<xc) * (boxes_crop[:, 1]<yc)
+    boxes_crop = boxes_crop[mask]
+
+    area = (boxes_crop[:, 2] - boxes_crop[:, 0]) * (boxes_crop[:, 3] - boxes_crop[:, 1])
+    labels = torch.ones(len(boxes_crop), dtype=torch.int64)
+    iscrowd = torch.zeros(len(boxes_crop), dtype=torch.uint8)
+    target["boxes"] = boxes_crop
+    target["area"] = area
+    target["iscrowd"] = iscrowd
+    target["labels"] = labels
+
+    return image_crop, target
+
+
+def cutmix_images(image, target, image_crop, target_crop):
+    _, x, y = image.size()
+    _, xc, yc = image_crop.size()
+
+    # xp = np.random.randint(0, x-xc)
+    # yp = np.random.randint(0, y-yc)
+    xp = 0
+    yp = 0
+    image[xp:xp+xc, yp:yp+yc, :] = image_crop
+    target_crop["boxes"] = adjust_boxes(target_crop, xp, yp)
+
+    boxes = target["boxes"].copy()
+    boxes[:, [0, 2]] = np.clip(boxes[:, [0, 2]], xp, xp+xc)
+    boxes[:, [1, 3]] = np.clip(boxes[:, [1, 3]], yp, yp+yc)
+    mask = (xp<boxes[:, 0]<xc+xp) * (xp<boxes[:, 1]<yc+yp)
+    target["boxes"] = target["boxes"][np.logical_not(mask)]
+    target["area"] = (target["boxes"][:, 2] - target["boxes"][:, 0]) * (target["boxes"][:, 3] - target["boxes"][:, 1])
+    labels = torch.ones(len(target["boxes"]), dtype=torch.int64)
+    iscrowd = torch.zeros(len(labels), dtype=torch.uint8)
+    target["iscrowd"] = iscrowd
+    target["labels"] = labels
+
+    return image, target, target_crop
+
+
+def adjust_boxes(target, xp, yp):
+    boxes = target["boxes"]
+    boxes[:, [0, 2]] += xp
+    boxes[:, [1, 3]] += yp
+    return boxes
+
 
 def get_train_transforms(cfg):
     image_size = cfg["image_size"]
@@ -82,7 +150,9 @@ def get_train_valid_dataloaders(ifold: int, df: pd.DataFrame, folds_df: pd.DataF
     train_idx, valid_idx = get_train_val_indexes(folds_df, ifold)
     train_dataset = GlobalWheatDataset(df, train_idx, train_dir, train_transforms, train=True)
     valid_dataset = GlobalWheatDataset(df, valid_idx, train_dir, valid_transforms, train=True)
-
+    cutmix_dataset = CutMixDataset(df, train_idx, train_dir, train_transforms, train=True)
+    cutmix_dataloader = DataLoader(cutmix_dataset, batch_size=4, shuffle=True, num_workers=4, drop_last=True,
+                                  collate_fn=collate_fn)
     train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=4, drop_last=True,
                                   collate_fn=collate_fn)
     valid_dataloader = DataLoader(valid_dataset, batch_size=4, shuffle=False, num_workers=4, collate_fn=collate_fn)
@@ -90,6 +160,8 @@ def get_train_valid_dataloaders(ifold: int, df: pd.DataFrame, folds_df: pd.DataF
                                   collate_fn=collate_fn)
     if cfg['mixup'] == True:
         return zip(train_dataloader, train_dataloader_mix), valid_dataloader
+    elif cfg['cutmix'] == True:
+        return cutmix_dataloader, valid_dataloader
     else:
         return train_dataloader, valid_dataloader
 
@@ -147,25 +219,11 @@ class Dloaders:
                         "test": test_datalaoder}
         return data_loaders
 
-import torch
-
-def merge_targets(target1, target2):
-    targets = []
-    for i in range(len(target1)):
-        target = dict()
-        for key in target1[i].keys():
-            merged_value = torch.cat([target1[i][key], target2[i][key]])
-            target[key] = merged_value
-        targets.append(target)
-    return tuple(targets)
-
-def mixup_images(images1, images2):
-    mixed_images = [0.5 * (images1 + images2) for (images1, images2) in zip(images1, images2)]
-    return tuple(mixed_images)
 
 
 
 if __name__ == "__main__":
-    train_df, test_df = load_dataframes()
-    dloaders = Dloaders().get_dataloaders(0)
+    images = torch.rand((5, 3, 10, 10))
+    image_crops = torch.zeros((5, 3, 5, 5))
+    cutmix_images = cutmix_images(images, image_crops)
     print("done")

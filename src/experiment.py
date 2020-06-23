@@ -52,7 +52,7 @@ class Experiment:
         last_epoch = self.initial_epoch + self.nepoch
         print(f"Epoch[{current_epoch+1}/{last_epoch}]:")
         start = time()
-        train_avg_loss, train_losses = self.runner.mixup_fit(self.train_dataloader,
+        train_avg_loss, train_losses = self.runner.fit(self.train_dataloader,
                                                         accumulation_steps=self.cfg['accumulation_steps'],
                                                         wandb=self.wandb)
         val_score = self.runner.evaluate(self.valid_dataloader)

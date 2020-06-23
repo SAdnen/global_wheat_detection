@@ -33,7 +33,7 @@ class Detector(object):
         #     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
         avg_loss = MetricLogger('scalar')
         total_loss = MetricLogger('dict')
-        #lr_log = MetricLogger('list')
+        lr_log = MetricLogger('list')
 
         self.optimizer.zero_grad()
         device = self.device
@@ -55,8 +55,7 @@ class Detector(object):
 
                 if self.lr_scheduler is not None:
                     self.lr_scheduler.step()
-                    wandb.log({"lr": self.lr_scheduler.get_last_lr()[0]})
-                    #lr_log.update(self.lr_scheduler.get_last_lr())
+                    lr_log.update(self.lr_scheduler.get_last_lr())
 
 
             print(f"Train iteration: [{i+1}/{len(data_loader)}]\r", end="")
