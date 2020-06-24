@@ -79,20 +79,22 @@ def get_train_transforms(cfg):
     image_size = cfg["image_size"]
     return A.Compose(
         [
-            A.RandomSizedCrop(min_max_height=(500, 500), height=image_size, width=image_size, p=0.5),
+            A.RandomSizedCrop(min_max_height=(image_size-200, image_size-200), height=image_size, width=image_size, p=0.5),
 
             A.OneOf([
                 A.HueSaturationValue(hue_shift_limit=0.2, sat_shift_limit=0.2,
                                      val_shift_limit=0.2, p=0.9),
                 A.RandomBrightnessContrast(brightness_limit=0.2,
                                            contrast_limit=0.2, p=0.9),
+                A.GaussNoise(var_limit=(0.01, .005), mean=0, always_apply=False, p=0.6),
             ], p=0.9),
 
             A.ToGray(p=0.01),
             A.HorizontalFlip(p=0.5),
             A.VerticalFlip(p=0.5),
             A.Resize(height=image_size, width=image_size, p=1),
-            A.CoarseDropout(max_holes=8, max_height=64, max_width=64, fill_value=0, p=0.5),
+            A.CoarseDropout(num_holes=8, max_h_size=32, max_w_size=128, fill_value=0, p=0.3),
+            A.CoarseDropout(num_holes=8, max_h_size=128, max_w_size=32, fill_value=0, p=0.3),
             ToTensorV2(p=1.0),
         ],
         p=1.0,
