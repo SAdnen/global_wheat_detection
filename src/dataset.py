@@ -47,17 +47,27 @@ def cutmix_images(image, target, image_crop, target_crop):
     x, y, _ = image.shape
     xc, yc, _ = image_crop.shape
 
-    xp = 0 #np.random.randint(0, x-xc)
-    yp = 0#np.random.randint(0, y-yc)
+    xp = 0  # np.random.randint(0, x-xc)
+    yp = 0  # np.random.randint(0, y-yc)
 
-    image[xp:xp+xc, yp:yp+yc, :] = image_crop
+    image[xp:xp + xc, yp:yp + yc, :] = image_crop
     target_crop["boxes"] = adjust_boxes(target_crop, xp, yp)
 
     boxes = target["boxes"].copy()
-    boxes[:, [0, 2]] = np.clip(boxes[:, [0, 2]], xp, xp+xc)
-    boxes[:, [1, 3]] = np.clip(boxes[:, [1, 3]], yp, yp+yc)
-    mask = (xp<boxes[:, 0]) * (boxes[:, 0]<xc+xp) * (yp<boxes[:, 1]) * (boxes[:, 1]<yc+yp)
-    target["boxes"] = target["boxes"][np.logical_not(mask)]
+    boxes[:, [0, 2]] = np.clip(boxes[:, [0, 2]], a_min=xc + xp, a_max=None)
+    boxes[:, [1, 3]] = np.clip(boxes[:, [1, 3]], a_min=yc + yp, a_max=None)
+    mask1 = boxes[:, 2] > xc + xp + 30
+    mask2 = boxes[:, 3] > yc + yp + 30
+    mask = np.logical_or(mask1, mask2)
+    #     target["boxes"] = target["boxes"][np.logical_not(mask)]
+    boxes = target["boxes"][mask]
+    maskx = (boxes[:, 0] < xc + xp) * (boxes[:, 3] < yc + yp)
+    masky = (boxes[:, 1] < yc + yp) * (boxes[:, 2] < xc + xp)
+
+    boxes[maskx, 0] = xc + xp
+    boxes[masky, 1] = yc + yp
+    target["boxes"] = boxes
+
     area = (target["boxes"][:, 2] - target["boxes"][:, 0]) * (target["boxes"][:, 3] - target["boxes"][:, 1])
     labels = torch.ones(len(target["boxes"]), dtype=torch.int64)
     iscrowd = torch.zeros(len(labels), dtype=torch.uint8)
