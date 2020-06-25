@@ -4,6 +4,7 @@ id: "fasterrcnn_resnet50_fpn_200_rpn_cutmix"
 # classifier
 device: "cuda"
 accumulation_steps: 4
+folds_df: "folds_df.csv"
 checkpoint: "fasterrcnn_resnet50_fpn_200_rpn_epoch_33_.pth"
 
 # optimizer:

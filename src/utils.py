@@ -93,8 +93,8 @@ def get_train_transforms(cfg):
             A.HorizontalFlip(p=0.5),
             A.VerticalFlip(p=0.5),
             A.Resize(height=image_size, width=image_size, p=1),
-            A.CoarseDropout(num_holes=8, max_h_size=32, max_w_size=128, fill_value=0, p=0.3),
-            A.CoarseDropout(num_holes=8, max_h_size=128, max_w_size=32, fill_value=0, p=0.3),
+            A.CoarseDropout(max_holes=8, max_height=32, max_width=128, fill_value=0, p=0.3),
+            A.CoarseDropout(max_holes=8, max_height=128, max_width=32, fill_value=0, p=0.3),
             ToTensorV2(p=1.0),
         ],
         p=1.0,
@@ -209,12 +209,12 @@ def load_dataframes():
 
 class Dloaders:
     df, test_df = load_dataframes()
-    folds_df = skFold(df)
-
+    #folds_df = skFold(df)
     def get_dataloaders(self, ifold, cfg):
+        folds_df = pd.read_csv(cfg["folds_df"])
         train_dir = path_settings["train"]
         test_dir = path_settings["test"]
-        train_dataloader, valid_dataloader = get_train_valid_dataloaders(ifold, self.df, self.folds_df, train_dir, cfg)
+        train_dataloader, valid_dataloader = get_train_valid_dataloaders(ifold, self.df, folds_df, train_dir, cfg)
         test_datalaoder = get_test_dataloader(self.test_df, test_dir, batch_size=2, cfg=cfg)
         data_loaders = {"train": train_dataloader,
                         "valid": valid_dataloader,
