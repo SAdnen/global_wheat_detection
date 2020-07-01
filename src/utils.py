@@ -147,18 +147,19 @@ def get_train_val_indexes(folds_df, ifold):
 
 
 def get_train_valid_dataloaders(ifold: int, df: pd.DataFrame, folds_df: pd.DataFrame, train_dir: str, cfg: dict) -> [DataLoader, DataLoader]:
+    bs = cfg["batch_size"]
     train_transforms = get_train_transforms(cfg)
     valid_transforms = get_valid_transforms(cfg)
     train_idx, valid_idx = get_train_val_indexes(folds_df, ifold)
     train_dataset = GlobalWheatDataset(df, train_idx, train_dir, train_transforms, train=True)
     valid_dataset = GlobalWheatDataset(df, valid_idx, train_dir, valid_transforms, train=True)
     cutmix_dataset = CutMixDataset(df, train_idx, train_dir, train_transforms, train=True)
-    cutmix_dataloader = DataLoader(cutmix_dataset, batch_size=4, shuffle=True, num_workers=4, drop_last=True,
+    cutmix_dataloader = DataLoader(cutmix_dataset, batch_size=bs, shuffle=True, num_workers=4, drop_last=True,
                                   collate_fn=collate_fn)
-    train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=4, drop_last=True,
+    train_dataloader = DataLoader(train_dataset, batch_size=bs, shuffle=True, num_workers=4, drop_last=True,
                                   collate_fn=collate_fn)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=4, shuffle=False, num_workers=4, collate_fn=collate_fn)
-    train_dataloader_mix = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=4, drop_last=True,
+    valid_dataloader = DataLoader(valid_dataset, batch_size=bs, shuffle=False, num_workers=4, collate_fn=collate_fn)
+    train_dataloader_mix = DataLoader(train_dataset, batch_size=bs, shuffle=True, num_workers=4, drop_last=True,
                                   collate_fn=collate_fn)
     if cfg['mixup'] == True:
         return zip(train_dataloader, train_dataloader_mix), valid_dataloader
