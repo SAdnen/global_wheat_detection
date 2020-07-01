@@ -153,7 +153,7 @@ def get_train_valid_dataloaders(ifold: int, df: pd.DataFrame, folds_df: pd.DataF
     train_idx, valid_idx = get_train_val_indexes(folds_df, ifold)
     train_dataset = GlobalWheatDataset(df, train_idx, train_dir, train_transforms, train=True)
     valid_dataset = GlobalWheatDataset(df, valid_idx, train_dir, valid_transforms, train=True)
-    cutmix_dataset = CutMixDataset(df, train_idx, train_dir, train_transforms, train=True)
+    cutmix_dataset = CutMixDataset(df, train_idx, train_dir, train_transforms, train=True, mixup=True)
     cutmix_dataloader = DataLoader(cutmix_dataset, batch_size=bs, shuffle=True, num_workers=4, drop_last=True,
                                   collate_fn=collate_fn)
     train_dataloader = DataLoader(train_dataset, batch_size=bs, shuffle=True, num_workers=4, drop_last=True,

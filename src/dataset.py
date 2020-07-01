@@ -5,6 +5,7 @@ import numpy as np
 
 from torch.utils.data import Dataset
 
+
 def merge_targets(target1, target2):
     target = dict()
     for key in target1.keys():
@@ -18,9 +19,11 @@ def merge_targets(target1, target2):
         target[key] = merged_value
     return target
 
+
 def mixup_images(images1, images2):
     mixed_images = [0.5 * (images1 + images2) for (images1, images2) in zip(images1, images2)]
     return tuple(mixed_images)
+
 
 def random_crop(image, target):
     boxes_crop = target["boxes"]
@@ -41,6 +44,26 @@ def random_crop(image, target):
     target["labels"] = labels
 
     return image_crop, target
+
+
+def cutmixup_images(image, target, image_crop, target_crop):
+    x, y, _ = image.shape
+    xc, yc, _ = image_crop.shape
+
+    xp = 0  # np.random.randint(0, x-xc)
+    yp = 0  # np.random.randint(0, y-yc)
+
+    image[xp:xp + xc, yp:yp + yc, :] = 0.5 * (image_crop + image[xp:xp + xc, yp:yp + yc, :])
+    target_crop["boxes"] = adjust_boxes(target_crop, xp, yp)
+    target["boxes"] = np.concatenate((target["boxes"], target_crop["boxes"]))
+    area = (target["boxes"][:, 2] - target["boxes"][:, 0]) * (target["boxes"][:, 3] - target["boxes"][:, 1])
+    labels = torch.ones(len(target["boxes"]), dtype=torch.int64)
+    iscrowd = torch.zeros(len(labels), dtype=torch.uint8)
+    target["iscrowd"] = iscrowd
+    target["labels"] = labels
+    target["area"] = torch.as_tensor(area, dtype=torch.float32)
+
+    return image, target
 
 
 def cutmix_images(image, target, image_crop, target_crop):
@@ -137,6 +160,7 @@ class GlobalWheatDataset(Dataset):
         #         image = Image.open(image_path).convert("RGB")
         return image
 
+
 class TestDataset(Dataset):
     def __init__(self, df, root_dir, transforms):
         self.df = df
@@ -160,16 +184,21 @@ class TestDataset(Dataset):
 
 
 class CutMixDataset(GlobalWheatDataset):
-    def __init__(self, df, image_ids, data_dir, transforms, train=True):
+    def __init__(self, df, image_ids, data_dir, transforms, train=True, mixup=False):
         super(CutMixDataset, self).__init__(df, image_ids, data_dir, transforms, train=True)
+        self.mixup = mixup
 
     def __getitem__(self, index):
         rindex = np.random.randint(0, len(self.image_ids))
         image, target = self.getitem(index)
         rimage, rtarget = self.getitem(rindex)
         rimage_crop, rtarget = random_crop(rimage, rtarget)
-        image, target, target_crop = cutmix_images(image, target, rimage_crop, rtarget)
-        target = merge_targets(target, target_crop)
+
+        if self.mixup:
+            image, target = cutmixup_images(image, target, rimage_crop, rtarget)
+        else:
+            image, target, target_crop = cutmix_images(image, target, rimage_crop, rtarget)
+            target = merge_targets(target, target_crop)
 
         if self.train:
             sample = self.transforms(**{"image": image,
