@@ -58,7 +58,7 @@ class Detector(object):
                     lr_log.update(self.lr_scheduler.get_last_lr())
 
 
-            print(f"Train iteration: [{i+1}/{len(data_loader)}]\r", end="")
+            print(f"\rTrain iteration: [{i+1}/{len(data_loader)}]", end="")
             avg_loss.update(loss_value)
             total_loss.update(loss_dict)
 
@@ -126,7 +126,7 @@ class Detector(object):
         mAp_logger = MetricLogger('list')
         with torch.no_grad():
             for (j, batch) in enumerate(val_dataloader):
-                print(f"Validation: [{j+1}/{len(val_dataloader)}]\r", end="")
+                print(f"\rValidation: [{j+1}/{len(val_dataloader)}]", end="")
                 images, targets = batch
                 del batch
                 images = [img.to(device) for img in images]
