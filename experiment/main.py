@@ -13,16 +13,16 @@ config = load_config(args.config)
 
 def main():
     # Initializing wandb config
-    wandb.init(project="GWD", id=config["id"], group="Fold0", config=config, resume="allow")
+    #wandb.init(project="GWD", id=config["id"], group="Fold0", config=config, resume="allow")
 
     # Create Experiment
     experiment = Experiment(config)
 
     # Attach WandB to Experiment
-    experiment.attach_wandb(wandb)
+    #experiment.attach_wandb(wandb)
 
     # Load checkpoint
-    #experiment.load_checkpoint()
+    experiment.load_checkpoint()
     # Run Experiment
     # import torch
     # checkpoint  = experiment.runner.model.state_dict()

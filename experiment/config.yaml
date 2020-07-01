@@ -18,7 +18,7 @@ network: "resnet50_fpn"
 train_nsamples: 80
 val_nsamples: 40
 image_size: 800
-batch_size: 2
+batch_size: 4
 mixup: False
 cutmix: True
 
