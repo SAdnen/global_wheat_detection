@@ -17,7 +17,7 @@ def main():
 
     # Create Experiment
     experiment = Experiment(config)
-
+    experiment.seed_everything()
     # Attach WandB to Experiment
     #experiment.attach_wandb(wandb)
 
