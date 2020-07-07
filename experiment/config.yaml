@@ -1,5 +1,7 @@
 project: "global-wheat-detection"
 id: "fasterrcnn_resnet50_fpn_200_rpn_cutmix"
+fold: 0
+
 
 # classifier
 device: "cuda"
@@ -9,6 +11,9 @@ checkpoint: "fasterrcnn_resnet50_fpn_200_rpn_epoch_33_.pth"
 
 # optimizer:
 lr: 0.0001
+
+# scheduler:
+scheduler: "OneCycleLR"
 
 metrics: ["map_score"]
 

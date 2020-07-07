@@ -8,24 +8,31 @@ from torch.optim.lr_scheduler import OneCycleLR
 from .model import Models
 from src.metrics import MetricLogger
 from src.utils import mixup_images, merge_targets
-
+from src.lr_scheduler import Scheduler
 from time import time
 
 
 class Detector(object):
     def __init__(self, cfg):
         self.device = cfg["device"]
-        self.model = Models().get_model(cfg["network"]) # cfg.network
+        self.model = Models().get_model(cfg["network"])  # cfg.network
         self.model.to(self.device)
         params = [p for p in self.model.parameters() if p.requires_grad]
-        self.optimizer = AdamW(params, lr=0.00001)
-        self.lr_scheduler = OneCycleLR(self.optimizer,
-                                       max_lr=1e-4,
-                                       epochs=cfg["nepochs"],
-                                       steps_per_epoch=169,  # len(dataloader)/accumulations
-                                       div_factor=25,  # for initial lr, default: 25
-                                       final_div_factor=1e3,  # for final lr, default: 1e4
-                                       )
+        self.optimizer = AdamW(params, lr=0.0001)
+        # self.lr_scheduler = OneCycleLR(self.optimizer,
+        #                                max_lr=1e-4,
+        #                                epochs=cfg["nepochs"],
+        #                                steps_per_epoch=169,  # len(dataloader)/accumulations
+        #                                div_factor=25,  # for initial lr, default: 25
+        #                                final_div_factor=1e3,  # for final lr, default: 1e4
+        #                                )
+        cfg_lr_scheduler = {"lr_scheduler": "CosineAnnealingWarmRestarts",
+                            "lr_scheduler_params": {"T_0": 170,
+                                             "eta_min": 1e-7
+                                             }
+                            }
+        self.lr_scheduler = Scheduler().get_lr_scheduler(optimizer=self.optimizer,
+                                                         cfg=cfg_lr_scheduler)
 
     def fit(self, data_loader, accumulation_steps=4, wandb=None):
         self.model.train()
