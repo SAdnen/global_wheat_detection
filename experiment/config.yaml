@@ -17,13 +17,13 @@ scheduler: "OneCycleLR"
 
 metrics: ["map_score"]
 
-network: "resnet50_fpn"
+network: "densenet121"
 
 # data:
 train_nsamples: 80
 val_nsamples: 40
 image_size: 800
-batch_size: 4
+batch_size: 1
 mixup: False
 cutmix: True
 
