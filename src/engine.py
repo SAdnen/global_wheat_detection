@@ -40,9 +40,14 @@ class Detector(object):
 
         for i, (images, targets) in enumerate(data_loader):
             images = list(image.to(device) for image in images)
-            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-            loss_dict = self.model(images, targets)
-            losses = sum(loss for loss in loss_dict.values())
+            images = torch.stack(images)
+            boxes = [target["boxes"].to(device).float() for target in targets]
+            labels = [target["labels"].to(device).float() for target in targets]
+            # targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+            # loss_dict = self.model(images, targets)
+            # losses = sum(loss for loss in loss_dict.values())
+            loss_dict = self.model(images, {'bbox': boxes, 'cls': labels})
+            losses = loss_dict["loss"]
             loss_value = losses.detach().item()
             if not math.isfinite(loss_value):
                 print("Loss is {}, stopping training".format(loss_value))
@@ -130,12 +135,20 @@ class Detector(object):
                 images, targets = batch
                 del batch
                 images = [img.to(device) for img in images]
+                images = torch.stack(images)
+                boxes = [target["boxes"].to(device).float() for target in targets]
+                labels = [target["labels"].to(device).float() for target in targets]
                 # targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-                predictions = self.model(images)#, targets)
-                for i, pred in enumerate(predictions):
-                    probas = pred["scores"].detach().cpu().numpy()
+                predictions = self.model(images, {'bbox': boxes,
+                                                'cls': labels,
+                                                'img_scale': torch.as_tensor([1.]*4).cuda(),
+                                                'img_size': torch.as_tensor([[512, 512]]*4).cuda()})
+                for i, pred in enumerate(predictions["detections"]):
+                    probas = pred[:, 1].detach().cpu().numpy()
+                    #probas = pred["scores"].detach().cpu().numpy()
                     mask = probas > 0.6
-                    preds = pred["boxes"].detach().cpu().numpy()[mask]
+                    #preds = pred["boxes"].detach().cpu().numpy()[mask]
+                    preds = pred[:, :4].detach().cpu().numpy()[mask]
                     gts = targets[i]["boxes"].detach().cpu().numpy()
                     score, scores = map_score(gts, preds, thresholds=[.5, .55, .6, .65, .7, .75])
                     mAp_logger.update(scores)

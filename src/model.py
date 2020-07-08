@@ -3,6 +3,16 @@ import torch
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.rpn import AnchorGenerator
 import torch.nn as nn
+from effdet import get_efficientdet_config, EfficientDet, DetBenchTrain
+from effdet.efficientdet import HeadNet
+
+def get_efficientdet():
+    config = get_efficientdet_config('tf_efficientdet_d0')
+    net = EfficientDet(config, pretrained_backbone=True)
+    config.num_classes = 1
+    config.image_size = 512
+    net.class_net = HeadNet(config, num_outputs=config.num_classes, norm_kwargs=dict(eps=.001, momentum=.01))
+    return DetBenchTrain(net, config)
 
 
 class Resnet50_fpn(nn.Module):
@@ -37,7 +47,8 @@ class Resnet50_fpn(nn.Module):
 
 
 class Models(object):
-    networks = {"resnet50_fpn": Resnet50_fpn()}
+    networks = {"resnet50_fpn": Resnet50_fpn(),
+                "effientdet0": get_efficientdet()}
 
     def get_model(self, reference):
         available_models = ", ".join(self.networks.keys())

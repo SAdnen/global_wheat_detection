@@ -123,6 +123,8 @@ class GlobalWheatDataset(Dataset):
                                         "labels": labels})
 
             target["boxes"] = torch.as_tensor(sample["bboxes"], dtype=torch.float32).reshape(-1, 4)
+
+
             image = sample["image"]
             return image, target
         else:
@@ -178,7 +180,6 @@ class CutMixDataset(GlobalWheatDataset):
 
             target["boxes"] = torch.as_tensor(sample["bboxes"], dtype=torch.float32).reshape(-1, 4)
             image = sample["image"]
-
             return image, target
 
     def getitem(self, index):
